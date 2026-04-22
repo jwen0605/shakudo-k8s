@@ -100,6 +100,12 @@ def test_new_replicaset_created_is_progressing():
     assert compute_health(dep, []) == HealthStatus.PROGRESSING
 
 
+def test_found_new_replicaset_is_progressing():
+    cond = _cond("Progressing", "True", "FoundNewReplicaSet")
+    dep = _dep(3, 0, 0, 3, conditions=[cond])
+    assert compute_health(dep, []) == HealthStatus.PROGRESSING
+
+
 def test_progressing_condition_false_uses_replicas():
     cond = _cond("Progressing", "False", "ReplicaSetUpdated")
     dep = _dep(3, 2, 2, 1, conditions=[cond])

@@ -65,12 +65,20 @@ def api_client(mock_clients):
 
 def make_k8s_deployment(name="test-app", namespace="default", uid="uid-1234",
                          image="nginx:latest", replicas=1):
-    """Minimal V1Deployment object suitable for service unit tests."""
+    """
+    Minimal V1Deployment object suitable for service unit tests.
+
+    NOTE: MagicMock(name=...) sets the mock's display name, not .name attribute.
+    We must assign string attributes explicitly after construction.
+    """
     dep = MagicMock(spec=client.V1Deployment)
-    dep.metadata = MagicMock(
-        name=name, namespace=namespace,
-        uid=uid, creation_timestamp=None, labels={},
-    )
+    dep.metadata = MagicMock()
+    dep.metadata.name = name
+    dep.metadata.namespace = namespace
+    dep.metadata.uid = uid
+    dep.metadata.creation_timestamp = None
+    dep.metadata.labels = {}
+
     dep.spec = MagicMock()
     dep.spec.replicas = replicas
     dep.spec.selector = MagicMock(match_labels={"app": name})
@@ -80,10 +88,10 @@ def make_k8s_deployment(name="test-app", namespace="default", uid="uid-1234",
     container.name = name
     container.image = image
     dep.spec.template.spec.containers = [container]
-    dep.status = MagicMock(
-        ready_replicas=replicas,
-        available_replicas=replicas,
-        unavailable_replicas=0,
-        conditions=[],
-    )
+
+    dep.status = MagicMock()
+    dep.status.ready_replicas = replicas
+    dep.status.available_replicas = replicas
+    dep.status.unavailable_replicas = 0
+    dep.status.conditions = []
     return dep

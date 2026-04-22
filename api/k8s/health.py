@@ -10,6 +10,14 @@ _FAILING_REASONS = frozenset({
     "OOMKilled",
 })
 
+# All Progressing condition reasons that indicate an active rollout
+_PROGRESSING_REASONS = frozenset({
+    "ReplicaSetUpdated",
+    "NewReplicaSetCreated",
+    "FoundNewReplicaSet",
+    "ReplicaSetScaled",
+})
+
 
 class HealthStatus(str, Enum):
     HEALTHY = "HEALTHY"
@@ -57,7 +65,7 @@ def compute_health(deployment, pods: Optional[List] = None) -> HealthStatus:
     conditions = {c.type: c for c in (status.conditions or [])}
     progressing = conditions.get("Progressing")
     if progressing and progressing.status == "True":
-        if progressing.reason in ("ReplicaSetUpdated", "NewReplicaSetCreated"):
+        if progressing.reason in _PROGRESSING_REASONS:
             return HealthStatus.PROGRESSING
 
     # 3–6. Replica counts

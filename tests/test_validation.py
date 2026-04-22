@@ -36,14 +36,23 @@ def test_invalid_name_rejected(api_client, bad_name):
 ])
 def test_valid_name_accepted(api_client, mock_clients, good_name):
     apps, core = mock_clients
-    # make create succeed
+    # MagicMock(name=...) sets the mock display name, NOT .name attribute.
+    # Assign string fields explicitly.
     created = MagicMock()
-    created.metadata = MagicMock(name=good_name, namespace="default", uid="u1",
-                                  creation_timestamp=None)
+    created.metadata = MagicMock()
+    created.metadata.name = good_name
+    created.metadata.namespace = "default"
+    created.metadata.uid = "u1"
+    created.metadata.creation_timestamp = None
     created.spec = MagicMock(replicas=1)
-    created.spec.template.spec.containers = [MagicMock(image="nginx:latest")]
-    created.status = MagicMock(ready_replicas=0, available_replicas=0,
-                                unavailable_replicas=1, conditions=[])
+    container = MagicMock()
+    container.image = "nginx:latest"
+    created.spec.template.spec.containers = [container]
+    created.status = MagicMock()
+    created.status.ready_replicas = 0
+    created.status.available_replicas = 0
+    created.status.unavailable_replicas = 1
+    created.status.conditions = []
     apps.create_namespaced_deployment.return_value = created
 
     r = api_client.post("/api/deployments", json={**VALID, "name": good_name})
@@ -60,12 +69,20 @@ def test_negative_replicas_rejected(api_client):
 def test_zero_replicas_accepted(api_client, mock_clients):
     apps, _ = mock_clients
     dep = MagicMock()
-    dep.metadata = MagicMock(name="my-app", namespace="default", uid="u1",
-                               creation_timestamp=None)
+    dep.metadata = MagicMock()
+    dep.metadata.name = "my-app"
+    dep.metadata.namespace = "default"
+    dep.metadata.uid = "u1"
+    dep.metadata.creation_timestamp = None
     dep.spec = MagicMock(replicas=0)
-    dep.spec.template.spec.containers = [MagicMock(image="nginx:latest")]
-    dep.status = MagicMock(ready_replicas=0, available_replicas=0,
-                            unavailable_replicas=0, conditions=[])
+    container = MagicMock()
+    container.image = "nginx:latest"
+    dep.spec.template.spec.containers = [container]
+    dep.status = MagicMock()
+    dep.status.ready_replicas = 0
+    dep.status.available_replicas = 0
+    dep.status.unavailable_replicas = 0
+    dep.status.conditions = []
     apps.create_namespaced_deployment.return_value = dep
     r = api_client.post("/api/deployments", json={**VALID, "replicas": 0})
     assert r.status_code == 201
