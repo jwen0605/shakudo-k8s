@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shakudo K8s Manager</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --border: #334155;
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --green: #22c55e;
+      --yellow: #eab308;
+      --red: #ef4444;
+      --blue: #3b82f6;
+      --gray: #64748b;
+      --radius: 8px;
+    }
+
+    body { background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; font-size: 14px; line-height: 1.5; }
+
+    /* Header */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 24px; background: var(--surface); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 10;
+    }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .header-left h1 { font-size: 18px; font-weight: 700; color: var(--text); }
+    .header-left h1 span { color: var(--accent); }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+
+    select {
+      background: var(--bg); color: var(--text); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 6px 10px; font-size: 13px; cursor: pointer;
+    }
+    select:focus { outline: none; border-color: var(--accent); }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 14px; border-radius: var(--radius); border: none;
+      font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity .15s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { color: var(--text); border-color: var(--text-muted); }
+    .btn-danger { background: var(--red); color: #fff; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+    #refresh-info { font-size: 12px; color: var(--text-muted); }
+
+    /* Main */
+    main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+
+    /* Error banner */
+    #error-banner {
+      background: rgba(239,68,68,.15); border: 1px solid var(--red);
+      color: var(--red); padding: 10px 16px; border-radius: var(--radius); margin-bottom: 16px;
+    }
+
+    /* Table */
+    .table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; }
+    thead { background: var(--surface); }
+    th { padding: 10px 14px; text-align: left; font-weight: 600; color: var(--text-muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+    td { padding: 12px 14px; border-top: 1px solid var(--border); vertical-align: middle; }
+    tr:hover td { background: rgba(255,255,255,.03); }
+
+    .deploy-name { font-weight: 600; color: var(--text); }
+    .ns-badge { background: rgba(99,102,241,.15); color: #a5b4fc; padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+    .image-cell { font-family: monospace; font-size: 12px; color: var(--text-muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .replica-cell { font-variant-numeric: tabular-nums; }
+    .ready { color: var(--green); }
+    .age-cell { color: var(--text-muted); white-space: nowrap; }
+    .actions { display: flex; gap: 6px; white-space: nowrap; }
+
+    /* Health badge */
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em;
+    }
+    .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .badge-HEALTHY    { background: rgba(34,197,94,.15);  color: var(--green);  } .badge-HEALTHY::before    { background: var(--green); }
+    .badge-DEGRADED   { background: rgba(234,179,8,.15);  color: var(--yellow); } .badge-DEGRADED::before   { background: var(--yellow); }
+    .badge-FAILING    { background: rgba(239,68,68,.15);  color: var(--red);    } .badge-FAILING::before    { background: var(--red); animation: pulse 1.2s infinite; }
+    .badge-PROGRESSING{ background: rgba(59,130,246,.15); color: var(--blue);   } .badge-PROGRESSING::before{ background: var(--blue); animation: spin 1s linear infinite; border-radius: 50%; }
+    .badge-UNKNOWN    { background: rgba(100,116,139,.15);color: var(--gray);   } .badge-UNKNOWN::before    { background: var(--gray); }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* Empty state */
+    #empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    #empty-state p { margin-top: 8px; font-size: 13px; }
+
+    /* Modal overlay */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.6);
+      display: flex; align-items: flex-start; justify-content: center;
+      padding: 60px 20px 20px; z-index: 100; overflow-y: auto;
+    }
+    .modal {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      width: 100%; max-width: 720px; flex-shrink: 0;
+    }
+    .modal-lg { max-width: 960px; }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--border); }
+    .modal-header h2 { font-size: 16px; font-weight: 700; }
+    .modal-close { background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; line-height: 1; }
+    .modal-close:hover { color: var(--text); }
+    .modal-body { padding: 24px; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 24px; border-top: 1px solid var(--border); }
+
+    /* Stats row */
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+    .stat-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+    .stat-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin-bottom: 4px; }
+    .stat-card .value { font-size: 24px; font-weight: 700; }
+    .stat-card .value.ok { color: var(--green); }
+    .stat-card .value.warn { color: var(--yellow); }
+    .stat-card .value.err { color: var(--red); }
+
+    /* Section headings inside modal */
+    .section-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin: 20px 0 10px; }
+
+    /* Pods table */
+    .inner-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .inner-table th { padding: 7px 10px; text-align: left; background: rgba(255,255,255,.04); color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: .05em; }
+    .inner-table td { padding: 8px 10px; border-top: 1px solid var(--border); font-family: monospace; }
+    .inner-table tr:last-child td { }
+
+    /* Conditions */
+    .cond-row { display: grid; grid-template-columns: 120px 60px 1fr; gap: 10px; align-items: start; padding: 8px 0; border-top: 1px solid var(--border); font-size: 12px; }
+    .cond-row:first-child { border-top: none; }
+    .cond-type { font-weight: 600; }
+    .cond-true { color: var(--green); } .cond-false { color: var(--red); }
+
+    /* Form */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group.full { grid-column: 1/-1; }
+    label { font-size: 12px; font-weight: 500; color: var(--text-muted); }
+    input, textarea {
+      background: var(--bg); color: var(--text); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 8px 12px; font-size: 13px; width: 100%;
+    }
+    input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+    input::placeholder { color: var(--gray); }
+    .hint { font-size: 11px; color: var(--text-muted); }
+
+    /* Toast */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 200;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 12px 18px; font-size: 13px; max-width: 340px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.4);
+      transition: opacity .3s;
+    }
+    #toast.success { border-color: var(--green); color: var(--green); }
+    #toast.error   { border-color: var(--red);   color: var(--red);   }
+
+    /* Spinner */
+    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    code { background: rgba(255,255,255,.07); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>Shakudo <span>K8s</span></h1>
+    <select id="ns-filter" onchange="onNsChange()">
+      <option value="">All namespaces</option>
+    </select>
+  </div>
+  <div class="header-right">
+    <span id="refresh-info"></span>
+    <button class="btn btn-ghost btn-sm" onclick="manualRefresh()">↺ Refresh</button>
+    <button class="btn btn-primary btn-sm" onclick="openCreate()">+ Deploy</button>
+  </div>
+</header>
+
+<main>
+  <div id="error-banner" style="display:none"></div>
+
+  <div class="table-wrap" id="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Namespace</th>
+          <th>Image</th>
+          <th>Replicas</th>
+          <th>Health</th>
+          <th>Age</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <div id="empty-state" style="display:none">
+    <div style="font-size:32px">📦</div>
+    <strong>No deployments found</strong>
+    <p>Click <em>+ Deploy</em> to create one.</p>
+  </div>
+</main>
+
+<!-- ── Detail modal ──────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="detail-overlay" style="display:none" onclick="closeDetail(event)">
+  <div class="modal modal-lg" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2 id="detail-title">Deployment</h2>
+      <button class="modal-close" onclick="closeDetail()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="stats-row" id="detail-stats"></div>
+      <div class="section-title">Conditions</div>
+      <div id="detail-conditions"></div>
+      <div class="section-title">Pods</div>
+      <div style="overflow-x:auto">
+        <table class="inner-table">
+          <thead><tr><th>Pod</th><th>Phase</th><th>Restarts</th><th>Node</th><th>Containers</th></tr></thead>
+          <tbody id="detail-pods"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" id="detail-scale-btn" onclick="openScaleFromDetail()">Scale</button>
+      <button class="btn btn-ghost btn-sm" id="detail-restart-btn" onclick="restartFromDetail()">Restart</button>
+      <button class="btn btn-danger btn-sm" id="detail-delete-btn" onclick="deleteFromDetail()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Scale modal ───────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="scale-overlay" style="display:none" onclick="closeScale(event)">
+  <div class="modal" style="max-width:360px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2>Scale Deployment</h2>
+      <button class="modal-close" onclick="closeScale()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Replica count</label>
+        <input type="number" id="scale-input" min="0" value="1">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeScale()">Cancel</button>
+      <button class="btn btn-primary" onclick="doScale()">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Delete confirm ────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="delete-overlay" style="display:none" onclick="closeDelete(event)">
+  <div class="modal" style="max-width:400px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2>Delete Deployment</h2>
+      <button class="modal-close" onclick="closeDelete()">×</button>
+    </div>
+    <div class="modal-body">
+      <p>Are you sure you want to delete <strong id="delete-name"></strong>?</p>
+      <p style="margin-top:8px;color:var(--text-muted);font-size:12px">This will cascade-delete all owned ReplicaSets and Pods.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeDelete()">Cancel</button>
+      <button class="btn btn-danger" onclick="doDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Create modal ──────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="create-overlay" style="display:none" onclick="closeCreate(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2>Create Deployment</h2>
+      <button class="modal-close" onclick="closeCreate()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Name *</label>
+          <input id="c-name" placeholder="my-app">
+        </div>
+        <div class="form-group">
+          <label>Namespace</label>
+          <input id="c-ns" placeholder="default" value="default">
+        </div>
+        <div class="form-group full">
+          <label>Image *</label>
+          <input id="c-image" placeholder="nginx:latest">
+        </div>
+        <div class="form-group">
+          <label>Replicas</label>
+          <input id="c-replicas" type="number" min="0" value="1">
+        </div>
+        <div class="form-group">
+          <label>Port</label>
+          <input id="c-port" type="number" placeholder="80">
+        </div>
+        <div class="form-group">
+          <label>CPU Request</label>
+          <input id="c-cpu-req" placeholder="100m">
+        </div>
+        <div class="form-group">
+          <label>Memory Request</label>
+          <input id="c-mem-req" placeholder="128Mi">
+        </div>
+        <div class="form-group">
+          <label>CPU Limit</label>
+          <input id="c-cpu-lim" placeholder="500m">
+        </div>
+        <div class="form-group">
+          <label>Memory Limit</label>
+          <input id="c-mem-lim" placeholder="256Mi">
+        </div>
+        <div class="form-group full">
+          <label>Environment variables <span class="hint">(KEY=VALUE, one per line)</span></label>
+          <textarea id="c-env" rows="3" placeholder="MY_VAR=hello&#10;ANOTHER=world"></textarea>
+        </div>
+      </div>
+      <div id="create-error" style="display:none;margin-top:12px;color:var(--red);font-size:12px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeCreate()">Cancel</button>
+      <button class="btn btn-primary" onclick="doCreate()">Create</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" style="display:none"></div>
+
+<script>
+const API = '/api/deployments';
+let deployments = [];
+let currentNs = '';
+let selectedUid = null;
+let selectedName = '';
+let countdown = 10;
+let countdownTimer = null;
+
+// ── Bootstrap ────────────────────────────────────────────────────────────────
+
+async function fetchDeployments() {
+  try {
+    const url = currentNs ? `${API}?namespace=${encodeURIComponent(currentNs)}` : API;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(await r.text());
+    deployments = await r.json();
+    renderTable();
+    updateNamespaceOptions();
+    clearError();
+  } catch (e) {
+    showError('Failed to load deployments: ' + e.message);
+  }
+}
+
+function startAutoRefresh() {
+  if (countdownTimer) clearInterval(countdownTimer);
+  countdown = 10;
+  updateRefreshInfo();
+  countdownTimer = setInterval(() => {
+    countdown--;
+    updateRefreshInfo();
+    if (countdown <= 0) {
+      countdown = 10;
+      fetchDeployments();
+    }
+  }, 1000);
+}
+
+function updateRefreshInfo() {
+  document.getElementById('refresh-info').textContent = `Auto-refresh in ${countdown}s`;
+}
+
+function manualRefresh() {
+  countdown = 10;
+  fetchDeployments();
+}
+
+function onNsChange() {
+  currentNs = document.getElementById('ns-filter').value;
+  fetchDeployments();
+}
+
+function updateNamespaceOptions() {
+  const sel = document.getElementById('ns-filter');
+  const current = sel.value;
+  const namespaces = [...new Set(deployments.map(d => d.namespace))].sort();
+  sel.innerHTML = '<option value="">All namespaces</option>';
+  namespaces.forEach(ns => {
+    const opt = document.createElement('option');
+    opt.value = ns; opt.textContent = ns;
+    if (ns === current) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+// ── Table render ─────────────────────────────────────────────────────────────
+
+function renderTable() {
+  const tbody = document.getElementById('tbody');
+  const empty = document.getElementById('empty-state');
+  const wrap  = document.getElementById('table-wrap');
+
+  if (!deployments.length) {
+    wrap.style.display = 'none';
+    empty.style.display = 'block';
+    return;
+  }
+  wrap.style.display = 'block';
+  empty.style.display = 'none';
+
+  tbody.innerHTML = deployments.map(d => `
+    <tr>
+      <td><span class="deploy-name" style="cursor:pointer;text-decoration:underline;text-underline-offset:3px" onclick="openDetail('${d.id}')">${esc(d.name)}</span></td>
+      <td><span class="ns-badge">${esc(d.namespace)}</span></td>
+      <td><span class="image-cell" title="${esc(d.image)}">${esc(d.image)}</span></td>
+      <td class="replica-cell"><span class="${d.replicas.ready === d.replicas.desired ? 'ready' : ''}">${d.replicas.ready}</span>/<span>${d.replicas.desired}</span></td>
+      <td>${healthBadge(d.health)}</td>
+      <td class="age-cell">${age(d.created_at)}</td>
+      <td>
+        <div class="actions">
+          <button class="btn btn-ghost btn-sm" onclick="openScale('${d.id}',${d.replicas.desired})">Scale</button>
+          <button class="btn btn-ghost btn-sm" onclick="doRestart('${d.id}')">Restart</button>
+          <button class="btn btn-danger btn-sm" onclick="confirmDelete('${d.id}','${esc(d.name)}')">Delete</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function healthBadge(h) {
+  return `<span class="badge badge-${h}">${h}</span>`;
+}
+
+function age(ts) {
+  if (!ts) return '—';
+  const diff = Date.now() - new Date(ts).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return '<1m';
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Detail modal ─────────────────────────────────────────────────────────────
+
+async function openDetail(uid) {
+  selectedUid = uid;
+  document.getElementById('detail-overlay').style.display = 'flex';
+  document.getElementById('detail-stats').innerHTML = '<div class="spinner"></div>';
+  document.getElementById('detail-pods').innerHTML = '';
+  document.getElementById('detail-conditions').innerHTML = '';
+
+  try {
+    const r = await fetch(`${API}/${uid}`);
+    if (!r.ok) throw new Error(await r.text());
+    const d = await r.json();
+    selectedName = d.name;
+    renderDetail(d);
+  } catch (e) {
+    document.getElementById('detail-stats').innerHTML = `<p style="color:var(--red)">${e.message}</p>`;
+  }
+}
+
+function renderDetail(d) {
+  document.getElementById('detail-title').textContent = `${d.name} — ${d.namespace}`;
+
+  // Stats row
+  const s = d.replicas;
+  const statsHTML = [
+    { label: 'Desired',    value: s.desired,     cls: '' },
+    { label: 'Ready',      value: s.ready,       cls: s.ready === s.desired ? 'ok' : (s.ready === 0 ? 'err' : 'warn') },
+    { label: 'Available',  value: s.available,   cls: s.available === s.desired ? 'ok' : 'warn' },
+    { label: 'Unavailable',value: s.unavailable, cls: s.unavailable === 0 ? 'ok' : 'err' },
+  ].map(c => `
+    <div class="stat-card">
+      <div class="label">${c.label}</div>
+      <div class="value ${c.cls}">${c.value}</div>
+    </div>
+  `).join('');
+  document.getElementById('detail-stats').innerHTML = statsHTML;
+
+  // Conditions
+  const conds = (d.conditions || []);
+  document.getElementById('detail-conditions').innerHTML = conds.length
+    ? conds.map(c => `
+      <div class="cond-row">
+        <span class="cond-type">${esc(c.type)}</span>
+        <span class="${c.status === 'True' ? 'cond-true' : 'cond-false'}">${c.status}</span>
+        <span style="color:var(--text-muted)">${esc(c.message || c.reason || '')}</span>
+      </div>`).join('')
+    : '<p style="color:var(--text-muted);font-size:12px">No conditions yet.</p>';
+
+  // Pods
+  const pods = d.pods || [];
+  document.getElementById('detail-pods').innerHTML = pods.length
+    ? pods.map(p => {
+        const containers = (p.containers || []).map(c => {
+          const s = c.state || {};
+          const label = s.state || 'unknown';
+          const reason = s.reason ? ` (${s.reason})` : '';
+          return `<code>${esc(c.name)}</code> <span style="color:var(--text-muted)">${label}${reason}</span>`;
+        }).join('<br>');
+        return `<tr>
+          <td>${esc(p.name)}</td>
+          <td>${esc(p.phase)}</td>
+          <td>${p.restart_count}</td>
+          <td>${esc(p.node || '—')}</td>
+          <td style="font-size:11px">${containers}</td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="5" style="color:var(--text-muted);text-align:center">No pods yet.</td></tr>';
+}
+
+function closeDetail(e) {
+  if (e && e.target !== document.getElementById('detail-overlay')) return;
+  document.getElementById('detail-overlay').style.display = 'none';
+  selectedUid = null;
+}
+
+function openScaleFromDetail() {
+  const d = deployments.find(x => x.id === selectedUid);
+  closeDetail();
+  if (d) openScale(d.id, d.replicas.desired);
+}
+
+function restartFromDetail() {
+  const uid = selectedUid;
+  closeDetail();
+  if (uid) doRestart(uid);
+}
+
+function deleteFromDetail() {
+  const d = deployments.find(x => x.id === selectedUid);
+  closeDetail();
+  if (d) confirmDelete(d.id, d.name);
+}
+
+// ── Scale ────────────────────────────────────────────────────────────────────
+
+function openScale(uid, current) {
+  selectedUid = uid;
+  document.getElementById('scale-input').value = current;
+  document.getElementById('scale-overlay').style.display = 'flex';
+}
+
+function closeScale(e) {
+  if (e && e.target !== document.getElementById('scale-overlay')) return;
+  document.getElementById('scale-overlay').style.display = 'none';
+}
+
+async function doScale() {
+  const replicas = parseInt(document.getElementById('scale-input').value, 10);
+  if (isNaN(replicas) || replicas < 0) { toast('Invalid replica count', 'error'); return; }
+  closeScale();
+  try {
+    const r = await fetch(`${API}/${selectedUid}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ replicas }),
+    });
+    if (!r.ok) { const e = await r.json(); throw new Error(e.detail || r.statusText); }
+    toast('Scaled successfully', 'success');
+    fetchDeployments();
+  } catch (e) {
+    toast('Scale failed: ' + e.message, 'error');
+  }
+}
+
+// ── Restart ──────────────────────────────────────────────────────────────────
+
+async function doRestart(uid) {
+  try {
+    const r = await fetch(`${API}/${uid}/restart`, { method: 'POST' });
+    if (!r.ok) { const e = await r.json(); throw new Error(e.detail || r.statusText); }
+    toast('Rollout restart triggered', 'success');
+    fetchDeployments();
+  } catch (e) {
+    toast('Restart failed: ' + e.message, 'error');
+  }
+}
+
+// ── Delete ───────────────────────────────────────────────────────────────────
+
+function confirmDelete(uid, name) {
+  selectedUid = uid;
+  document.getElementById('delete-name').textContent = name;
+  document.getElementById('delete-overlay').style.display = 'flex';
+}
+
+function closeDelete(e) {
+  if (e && e.target !== document.getElementById('delete-overlay')) return;
+  document.getElementById('delete-overlay').style.display = 'none';
+}
+
+async function doDelete() {
+  closeDelete();
+  try {
+    const r = await fetch(`${API}/${selectedUid}`, { method: 'DELETE' });
+    if (r.status !== 204 && !r.ok) { const e = await r.json(); throw new Error(e.detail || r.statusText); }
+    toast('Deployment deleted', 'success');
+    fetchDeployments();
+  } catch (e) {
+    toast('Delete failed: ' + e.message, 'error');
+  }
+}
+
+// ── Create ───────────────────────────────────────────────────────────────────
+
+function openCreate() {
+  document.getElementById('create-error').style.display = 'none';
+  document.getElementById('create-overlay').style.display = 'flex';
+}
+
+function closeCreate(e) {
+  if (e && e.target !== document.getElementById('create-overlay')) return;
+  document.getElementById('create-overlay').style.display = 'none';
+}
+
+async function doCreate() {
+  const name    = document.getElementById('c-name').value.trim();
+  const ns      = document.getElementById('c-ns').value.trim() || 'default';
+  const image   = document.getElementById('c-image').value.trim();
+  const replicas = parseInt(document.getElementById('c-replicas').value, 10) || 1;
+  const portVal = document.getElementById('c-port').value.trim();
+  const cpuReq  = document.getElementById('c-cpu-req').value.trim();
+  const memReq  = document.getElementById('c-mem-req').value.trim();
+  const cpuLim  = document.getElementById('c-cpu-lim').value.trim();
+  const memLim  = document.getElementById('c-mem-lim').value.trim();
+  const envRaw  = document.getElementById('c-env').value.trim();
+
+  if (!name || !image) {
+    showCreateError('Name and Image are required.');
+    return;
+  }
+
+  const body = { name, namespace: ns, image, replicas };
+
+  if (portVal) body.port = parseInt(portVal, 10);
+
+  const res = {};
+  if (cpuReq || memReq) res.requests = {};
+  if (cpuLim || memLim) res.limits   = {};
+  if (cpuReq) res.requests.cpu    = cpuReq;
+  if (memReq) res.requests.memory = memReq;
+  if (cpuLim) res.limits.cpu      = cpuLim;
+  if (memLim) res.limits.memory   = memLim;
+  if (Object.keys(res).length) body.resources = res;
+
+  if (envRaw) {
+    body.env = envRaw.split('\n')
+      .map(l => l.trim()).filter(Boolean)
+      .map(l => { const [k, ...rest] = l.split('='); return { name: k, value: rest.join('=') }; });
+  }
+
+  try {
+    const r = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const err = await r.json();
+      const msg = err.detail || (err.detail?.[0]?.msg) || r.statusText;
+      showCreateError(typeof msg === 'string' ? msg : JSON.stringify(msg));
+      return;
+    }
+    closeCreate();
+    toast('Deployment created', 'success');
+    fetchDeployments();
+  } catch (e) {
+    showCreateError(e.message);
+  }
+}
+
+function showCreateError(msg) {
+  const el = document.getElementById('create-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+// ── Error banner ─────────────────────────────────────────────────────────────
+
+function showError(msg) {
+  const el = document.getElementById('error-banner');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+function clearError() {
+  document.getElementById('error-banner').style.display = 'none';
+}
+
+// ── Toast ────────────────────────────────────────────────────────────────────
+
+let toastTimer = null;
+function toast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = type;
+  el.style.display = 'block';
+  el.style.opacity = '1';
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.style.opacity = '0'; setTimeout(() => { el.style.display = 'none'; }, 300); }, 3000);
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+fetchDeployments();
+startAutoRefresh();
+</script>
+</body>
+</html>
