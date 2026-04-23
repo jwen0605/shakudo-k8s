@@ -22,7 +22,7 @@ It's lightweight, runs against any Kubernetes cluster, and is built to slot into
 
 ![Create deployment form](docs/create-form.png)
 
-**API demo** — the same operations via curl, with kubectl verification side-by-side:
+**API demo** — failure detection end-to-end: deploy `nginx:latest` with 3 replicas (healthy), then deploy `nginx:nonexistent` (bad image) and confirm the API correctly surfaces `FAILING` health with `ImagePullBackOff` at both the deployment and pod level, verified with `kubectl`:
 
 ![API demo](docs/api-demo.png)
 
