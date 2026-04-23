@@ -24,12 +24,17 @@ MANAGED_BY_VALUE = "shakudo-k8s"
 MANAGED_SELECTOR = f"{MANAGED_BY_LABEL}={MANAGED_BY_VALUE}"
 
 
+def _resource_map(spec) -> Optional[dict]:
+    if spec is None:
+        return None
+    m = {k: v for k, v in (("cpu", spec.cpu), ("memory", spec.memory)) if v}
+    return m or None
+
+
 class DeploymentService:
     def __init__(self, apps_v1: client.AppsV1Api, core_v1: client.CoreV1Api):
         self.apps = apps_v1
         self.core = core_v1
-
-    # ── Namespace helpers ────────────────────────────────────────────────────
 
     def _ensure_namespace(self, namespace: str) -> None:
         try:
@@ -46,8 +51,6 @@ class DeploymentService:
                     raise HTTPException(500, detail=f"Failed to create namespace: {ce.reason}")
             else:
                 raise HTTPException(500, detail=f"K8s API error: {e.reason}")
-
-    # ── Lookup by UID ────────────────────────────────────────────────────────
 
     def _find_by_uid(self, uid: str) -> Optional[client.V1Deployment]:
         try:
@@ -67,9 +70,7 @@ class DeploymentService:
             raise HTTPException(404, detail=f"Deployment with id '{uid}' not found")
         return dep
 
-    # ── Pod helpers ──────────────────────────────────────────────────────────
-
-    def _get_pods(self, dep: client.V1Deployment) -> List:
+    def _get_pods(self, dep: client.V1Deployment) -> List[client.V1Pod]:
         selector = dep.spec.selector.match_labels or {}
         label_str = ",".join(f"{k}={v}" for k, v in selector.items())
         try:
@@ -80,8 +81,6 @@ class DeploymentService:
             return pods.items
         except ApiException:
             return []
-
-    # ── Serialisation ────────────────────────────────────────────────────────
 
     @staticmethod
     def _image_from_deployment(dep: client.V1Deployment) -> str:
@@ -114,7 +113,8 @@ class DeploymentService:
         total_restarts = 0
 
         for cs in pod_status.container_statuses or []:
-            total_restarts += cs.restart_count or 0
+            rc = cs.restart_count or 0
+            total_restarts += rc
             state_out: Optional[ContainerStateOut] = None
             if cs.state:
                 s = cs.state
@@ -141,7 +141,7 @@ class DeploymentService:
                     name=cs.name,
                     image=cs.image or "",
                     ready=cs.ready or False,
-                    restart_count=cs.restart_count or 0,
+                    restart_count=rc,
                     state=state_out,
                 )
             )
@@ -188,8 +188,6 @@ class DeploymentService:
             pods=[self._serialise_pod(p) for p in pods],
         )
 
-    # ── Build K8s body ───────────────────────────────────────────────────────
-
     @staticmethod
     def _build_body(req: DeploymentCreateRequest) -> client.V1Deployment:
         base_labels = {
@@ -210,21 +208,9 @@ class DeploymentService:
             ]
 
         if req.resources:
-            req_map: dict = {}
-            lim_map: dict = {}
-            if req.resources.requests:
-                if req.resources.requests.cpu:
-                    req_map["cpu"] = req.resources.requests.cpu
-                if req.resources.requests.memory:
-                    req_map["memory"] = req.resources.requests.memory
-            if req.resources.limits:
-                if req.resources.limits.cpu:
-                    lim_map["cpu"] = req.resources.limits.cpu
-                if req.resources.limits.memory:
-                    lim_map["memory"] = req.resources.limits.memory
             container.resources = client.V1ResourceRequirements(
-                requests=req_map or None,
-                limits=lim_map or None,
+                requests=_resource_map(req.resources.requests),
+                limits=_resource_map(req.resources.limits),
             )
 
         if req.command:
@@ -303,15 +289,13 @@ class DeploymentService:
     def update(self, uid: str, req: DeploymentUpdateRequest) -> DeploymentResponse:
         dep = self._require_by_uid(uid)
 
-        patch: dict = {}
+        patch: dict = {"spec": {}}
         if req.replicas is not None:
-            patch["spec"] = {"replicas": req.replicas}
+            patch["spec"]["replicas"] = req.replicas
         if req.image is not None:
             container_name = dep.spec.template.spec.containers[0].name
-            patch.setdefault("spec", {})
-            patch["spec"].setdefault("template", {})
-            patch["spec"]["template"]["spec"] = {
-                "containers": [{"name": container_name, "image": req.image}]
+            patch["spec"]["template"] = {
+                "spec": {"containers": [{"name": container_name, "image": req.image}]}
             }
 
         try:

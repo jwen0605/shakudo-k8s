@@ -1,5 +1,5 @@
 import re
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 _DNS_LABEL_RE = re.compile(r'^[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?$|^[a-z0-9]$')
@@ -93,7 +93,6 @@ class DeploymentUpdateRequest(BaseModel):
         return self
 
 
-# ── Response models ──────────────────────────────────────────────────────────
 
 class ReplicaStatus(BaseModel):
     desired: int

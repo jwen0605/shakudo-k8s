@@ -1,6 +1,32 @@
 # Shakudo K8s Manager
 
-Kubernetes Workload Deployment & Monitoring Platform — Shakudo AI-First Engineering Exercise.
+Managing Kubernetes deployments usually means juggling kubectl commands, YAML files, and scattered dashboards. Shakudo K8s Manager simplifies that into a single REST API and a clean web UI.
+
+You can spin up a deployment, scale it, swap the image, trigger a rolling restart, and get real-time health status — all in one place, no YAML required. Health is surfaced as a single enum: Healthy, Degraded, Failing, or Progressing — so you know exactly what's going on at a glance.
+
+It's lightweight, runs against any Kubernetes cluster, and is built to slot into a larger platform.
+
+---
+
+## Demo
+
+**Dashboard** — live health status across all namespaces, with inline Scale / Restart / Delete actions:
+
+![Dashboard](docs/dashboard.png)
+
+**Deployment detail** — per-pod breakdown with replica counts, conditions, restart counts, and container state:
+
+![Deployment detail](docs/deployment-detail.png)
+
+**Create deployment** — form-driven UI covering image, replicas, port, resource requests/limits, and env vars:
+
+![Create deployment form](docs/create-form.png)
+
+**API demo** — the same operations via curl, with kubectl verification side-by-side:
+
+![API demo](docs/api-demo.png)
+
+---
 
 ## Stack
 

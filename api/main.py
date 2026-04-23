@@ -4,7 +4,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
 
 from api.k8s.client import init_k8s
 from api.routes.deployments import router as deployments_router
@@ -32,7 +31,6 @@ app.add_middleware(
 
 app.include_router(deployments_router)
 
-# Serve the web UI from /ui
 _UI_DIR = os.path.join(os.path.dirname(__file__), "..", "ui")
 
 
